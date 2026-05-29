@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: smart-inventory-forecaster
+    env: python
+    region: oregon
+    plan: free
+    pythonVersion: "3.11.9"
+    buildCommand: pip install --upgrade pip && pip install --only-binary=:all: scipy numpy pandas pyarrow scikit-learn && pip install -r requirements-deploy.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false

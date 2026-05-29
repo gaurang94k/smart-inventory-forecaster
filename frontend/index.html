@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Inventory Forecaster</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:        #185FA5;
+      --accent-hover:  #1470ba;
+      --accent-light:  #dbeafe;
+      --bg:            #f1f5f9;
+      --sidebar-bg:    #0f172a;
+      --card-bg:       #ffffff;
+      --text:          #0f172a;
+      --text-muted:    #64748b;
+      --border:        #e2e8f0;
+      --success:       #10b981;
+      --success-bg:    #d1fae5;
+      --warning:       #f59e0b;
+      --warning-bg:    #fef3c7;
+      --danger:        #ef4444;
+      --danger-bg:     #fee2e2;
+      --shadow:        0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:     0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+      --radius:        8px;
+      --radius-lg:     12px;
+      --ease:          0.15s ease;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:           #0f172a;
+        --card-bg:      #1e293b;
+        --text:         #f1f5f9;
+        --text-muted:   #94a3b8;
+        --border:       #334155;
+        --accent-light: #1e3a5f;
+        --success-bg:   #064e3b;
+        --warning-bg:   #451a03;
+        --danger-bg:    #450a0a;
+        --shadow:       0 1px 3px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.25);
+        --shadow-md:    0 4px 6px rgba(0,0,0,.35);
+      }
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .layout { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 224px;
+      flex-shrink: 0;
+      background: var(--sidebar-bg);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 20px 16px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .brand-logo {
+      width: 34px; height: 34px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+
+    .brand-name  { font-size: 15px; font-weight: 700; color: #f1f5f9; letter-spacing: -.02em; }
+    .brand-sub   { font-size: 10px; color: #475569; letter-spacing: .06em; text-transform: uppercase; }
+
+    .nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+
+    .nav-section-label {
+      font-size: 10px; font-weight: 600; color: #475569;
+      letter-spacing: .08em; text-transform: uppercase;
+      padding: 8px 10px 4px;
+    }
+
+    .nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 6px;
+      cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+      color: #94a3b8; font-size: 13.5px; font-weight: 500; font-family: inherit;
+      transition: background var(--ease), color var(--ease);
+      user-select: none;
+    }
+    .nav-btn:hover  { background: rgba(255,255,255,.06); color: #f1f5f9; }
+    .nav-btn.active { background: rgba(24,95,165,.28); color: #60a5fa; }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255,255,255,.06);
+    }
+
+    .health-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #475569; }
+    .health-dot { width: 8px; height: 8px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+    .health-dot.ok    { background: var(--success); }
+    .health-dot.error { background: var(--danger); }
+
+    /* ── Main content ─────────────────────────────────────────────────── */
+    .main { flex: 1; overflow-y: auto; padding: 28px 32px; min-width: 0; }
+
+    .tab-section          { display: none; }
+    .tab-section.active   { display: block; }
+
+    /* ── Page header ─────────────────────────────────────────────────── */
+    .page-header { margin-bottom: 22px; }
+    .page-title  { font-size: 22px; font-weight: 700; letter-spacing: -.025em; }
+    .page-sub    { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+    }
+
+    .card-title {
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+    }
+
+    /* ── KPI grid ─────────────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 16px 20px;
+    }
+
+    .kpi-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+    .kpi-value { font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1; color: var(--text); }
+    .kpi-value.accent { color: var(--accent); }
+    .kpi-sub   { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+
+    /* ── Grid helpers ─────────────────────────────────────────────────── */
+    .grid-2  { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+    .grid-53 { display: grid; grid-template-columns: 5fr 3fr;  gap: 16px; margin-bottom: 18px; }
+    .mb      { margin-bottom: 18px; }
+
+    /* ── Tables ────────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    th {
+      text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .05em;
+      padding: 8px 12px; border-bottom: 2px solid var(--border); white-space: nowrap;
+    }
+
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--bg); }
+    tr.best-row td { background: var(--accent-light); }
+
+    /* ── Badges ────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-blue   { background: var(--accent-light);  color: var(--accent);  }
+    .badge-green  { background: var(--success-bg);    color: var(--success); }
+    .badge-yellow { background: var(--warning-bg);    color: var(--warning); }
+    .badge-red    { background: var(--danger-bg);     color: var(--danger);  }
+
+    .delta       { font-size: 12px; font-weight: 600; }
+    .delta-up    { color: var(--danger); }
+    .delta-down  { color: var(--success); }
+    .delta-zero  { color: var(--text-muted); }
+
+    /* ── Controls ─────────────────────────────────────────────────────── */
+    .controls { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+
+    .select-wrap { position: relative; }
+    .select-wrap::after {
+      content: '▾'; position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%); color: var(--text-muted); pointer-events: none; font-size: 12px;
+    }
+
+    select {
+      appearance: none;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 8px 30px 8px 12px;
+      font-size: 13px; color: var(--text); cursor: pointer; min-width: 270px;
+      font-family: inherit;
+    }
+    select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(24,95,165,.15); }
+
+    button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: var(--radius); border: none;
+      cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+      transition: background var(--ease); user-select: none;
+    }
+    button:active { transform: scale(.97); }
+
+    .btn-primary           { background: var(--accent); color: #fff; }
+    .btn-primary:hover     { background: var(--accent-hover); }
+    .btn-primary:disabled  { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .btn-secondary         { background: var(--border); color: var(--text); }
+    .btn-secondary:hover   { filter: brightness(.92); }
+
+    /* ── Slider ────────────────────────────────────────────────────────── */
+    .slider-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .slider-label { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+
+    input[type=range] {
+      -webkit-appearance: none; width: 200px; height: 6px;
+      border-radius: 3px; background: var(--border); outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+    }
+    .slider-val { font-size: 15px; font-weight: 700; color: var(--accent); min-width: 42px; }
+
+    /* ── Chart containers ──────────────────────────────────────────────── */
+    .chart-box    { position: relative; height: 260px; }
+    .chart-box-lg { position: relative; height: 320px; }
+
+    /* ── Loading / empty / error states ───────────────────────────────── */
+    .state-box {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; padding: 36px; color: var(--text-muted); font-size: 13px;
+    }
+    .spinner {
+      width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      animation: spin .65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-bar {
+      background: var(--danger-bg); color: var(--danger);
+      border-radius: var(--radius); padding: 10px 14px;
+      font-size: 13px; margin-bottom: 14px;
+    }
+
+    /* ── AI Chat ───────────────────────────────────────────────────────── */
+    .chat-wrap {
+      display: flex; flex-direction: column;
+      height: calc(100vh - 180px); min-height: 400px;
+    }
+
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 18px;
+      display: flex; flex-direction: column; gap: 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .msg { display: flex; gap: 10px; max-width: 88%; }
+    .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+
+    .msg-avatar {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+    }
+    .msg-avatar.ai   { background: var(--accent); color: #fff; }
+    .msg-avatar.user { background: var(--border);  color: var(--text-muted); }
+
+    .msg-bubble {
+      padding: 9px 13px; border-radius: 12px;
+      font-size: 13.5px; line-height: 1.55; max-width: 100%;
+    }
+    .msg.ai   .msg-bubble { background: var(--bg); border-bottom-left-radius: 4px; }
+    .msg.user .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+
+    .msg-bubble pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; }
+
+    .chat-input-row {
+      display: flex; gap: 8px; padding: 10px 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+
+    .chat-input {
+      flex: 1; padding: 9px 13px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: 13.5px; font-family: inherit;
+      background: var(--bg); color: var(--text); outline: none;
+    }
+    .chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(24,95,165,.15); }
+
+    .quick-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+    .quick-label { font-size: 12px; color: var(--text-muted); }
+    .quick-pill {
+      background: var(--card-bg); border: 1px solid var(--border);
+      color: var(--text); padding: 5px 11px; border-radius: 20px;
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      transition: border-color var(--ease), color var(--ease);
+    }
+    .quick-pill:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Code text ─────────────────────────────────────────────────────── */
+    code { font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 12px; }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2, .grid-53 { grid-template-columns: 1fr; }
+      .main { padding: 16px 18px; }
+    }
+    @media (max-width: 600px) {
+      .sidebar { width: 56px; }
+      .brand-name, .brand-sub, .nav-btn span:not(.nav-icon), .sidebar-footer span { display: none; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ══════════════════ SIDEBAR ══════════════════ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">📦</div>
+      <div>
+        <div class="brand-name">InventIQ</div>
+        <div class="brand-sub">M5 · CA_1</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section-label">Dashboards</div>
+      <button class="nav-btn active" id="nav-overview"  onclick="showTab('overview')">
+        <span class="nav-icon">🏠</span><span>Overview</span>
+      </button>
+      <button class="nav-btn" id="nav-forecast"  onclick="showTab('forecast')">
+        <span class="nav-icon">📈</span><span>Forecast Explorer</span>
+      </button>
+      <button class="nav-btn" id="nav-inventory" onclick="showTab('inventory')">
+        <span class="nav-icon">🗃️</span><span>Inventory</span>
+      </button>
+      <button class="nav-btn" id="nav-assistant" onclick="showTab('assistant')">
+        <span class="nav-icon">🤖</span><span>AI Assistant</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="health-row">
+        <div class="health-dot" id="health-dot"></div>
+        <span id="health-text">Connecting…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══════════════════ MAIN ══════════════════ -->
+  <main class="main">
+
+    <!-- ════════ OVERVIEW ════════ -->
+    <section class="tab-section active" id="tab-overview">
+      <div class="page-header">
+        <div class="page-title">Overview</div>
+        <div class="page-sub">System summary · 5 SKUs · Store CA_1 · Walmart M5 dataset</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">SKUs Monitored</div>
+          <div class="kpi-value accent" id="kpi-skus">—</div>
+          <div class="kpi-sub">Foods · Household · Hobbies</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Annual Cost</div>
+          <div class="kpi-value" id="kpi-cost">—</div>
+          <div class="kpi-sub">Holding + ordering @ 95% SL</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Dominant Best Model</div>
+          <div class="kpi-value" id="kpi-model" style="font-size:16px;line-height:1.2">—</div>
+          <div class="kpi-sub">Most common across SKUs</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Avg Stockout Risk</div>
+          <div class="kpi-value" id="kpi-risk">—</div>
+          <div class="kpi-sub">At 95% service level</div>
+        </div>
+      </div>
+
+      <div class="grid-53">
+        <div class="card">
+          <div class="card-title">Model Performance by SKU — MAPE % (h=28, avg across folds)</div>
+          <div id="overview-chart-state" class="state-box"><div class="spinner"></div> Loading all SKU forecasts…</div>
+          <div class="chart-box" id="overview-chart-wrap" style="display:none">
+            <canvas id="overview-chart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Mean Daily Demand by SKU</div>
+          <div class="chart-box">
+            <canvas id="demand-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb">
+        <div class="card-title">Inventory Summary</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>SKU</th><th>Category</th><th>Daily Demand</th>
+                <th>Best Model</th><th>Safety Stock</th>
+                <th>Reorder Point</th><th>Annual Cost</th><th>Stockout Risk</th>
+              </tr>
+            </thead>
+            <tbody id="overview-tbody">
+              <tr><td colspan="8"><div class="state-box"><div class="spinner"></div> Loading…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ FORECAST EXPLORER ════════ -->
+    <section class="tab-section" id="tab-forecast">
+      <div class="page-header">
+        <div class="page-title">Forecast Explorer</div>
+        <div class="page-sub">CV performance and fold-by-fold forecast vs actual · horizon 28 days</div>
+      </div>
+
+      <div class="controls">
+        <div class="select-wrap">
+          <select id="fc-sku-select"><option value="">— Select a SKU-store —</option></select>
+        </div>
+        <button class="btn-primary" onclick="loadForecast()">Load Forecast</button>
+      </div>
+
+      <div id="fc-error" class="error-bar" style="display:none"></div>
+
+      <div id="fc-content" style="display:none">
+        <div class="grid-53 mb">
+          <div class="card">
+            <div class="card-title">Model Performance (mean across folds & horizons · sorted by MASE ↑)</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Model</th><th>MAPE</th><th>RMSE</th><th>MASE</th></tr></thead>
+                <tbody id="perf-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">MASE Ranking (lower = better)</div>
+            <div class="chart-box"><canvas id="model-chart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card mb">
+          <div class="card-title" id="fold-chart-title">Forecast vs Actual · Best Model · Horizon 28 · All Folds</div>
+          <div class="chart-box-lg"><canvas id="fold-chart"></canvas></div>
+        </div>
+      </div>
+
+      <div id="fc-empty" class="state-box">Select a SKU above and click <strong style="margin-left:4px">Load Forecast</strong>.</div>
+    </section>
+
+    <!-- ════════ INVENTORY ════════ -->
+    <section class="tab-section" id="tab-inventory">
+      <div class="page-header">
+        <div class="page-title">Inventory Recommendations</div>
+        <div class="page-sub">Safety stock · reorder points · EOQ — adjust service level below for scenario analysis</div>
+      </div>
+
+      <div class="card mb">
+        <div class="card-title">Baseline Recommendations (95% Service Level)</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>SKU</th><th>Best Model</th><th>Daily Demand</th>
+                <th>Safety Stock</th><th>Reorder Point</th><th>EOQ</th>
+                <th>Annual Orders</th><th>Annual Cost</th><th>Stockout Risk</th>
+              </tr>
+            </thead>
+            <tbody id="inv-tbody">
+              <tr><td colspan="9"><div class="state-box"><div class="spinner"></div> Loading…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card mb">
+        <div class="card-title">Scenario Analysis — What-If Service Level</div>
+        <div class="slider-row" style="margin-bottom:16px">
+          <span class="slider-label">Service Level:</span>
+          <input type="range" id="sl-slider" min="80" max="99" value="95" step="1"
+                 oninput="document.getElementById('sl-val').textContent=this.value+'%'">
+          <span class="slider-val" id="sl-val">95%</span>
+          <button class="btn-primary" id="whatif-btn" onclick="runWhatIf()">Run Scenario</button>
+        </div>
+
+        <div id="whatif-loading" style="display:none" class="state-box">
+          <div class="spinner"></div> Recalculating inventory parameters…
+        </div>
+
+        <div id="whatif-results" style="display:none">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th><th>SL</th>
+                  <th>Safety Stock</th><th>Δ SS</th>
+                  <th>Reorder Point</th><th>Δ ROP</th>
+                  <th>Annual Cost</th><th>Δ Cost</th>
+                  <th>Stockout Risk</th>
+                </tr>
+              </thead>
+              <tbody id="whatif-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ AI ASSISTANT ════════ -->
+    <section class="tab-section" id="tab-assistant">
+      <div class="page-header">
+        <div class="page-title">AI Assistant</div>
+        <div class="page-sub">Natural-language queries · powered by Claude Haiku via the Anthropic API</div>
+      </div>
+
+      <div class="chat-wrap">
+        <div class="chat-messages" id="chat-messages">
+          <div class="msg ai">
+            <div class="msg-avatar ai">AI</div>
+            <div class="msg-bubble">
+              Hello! I'm your inventory planning assistant. I can answer questions about
+              forecast accuracy, safety stock, reorder points, and cost scenarios for the
+              5 SKUs in this system.<br><br>
+              Try one of the quick questions below, or type your own.
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="chat-input"
+                 placeholder="Ask about forecasts, inventory, or recommendations…"
+                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}">
+          <button class="btn-primary" id="send-btn" onclick="sendMsg()">Send</button>
+        </div>
+      </div>
+
+      <div class="quick-row">
+        <span class="quick-label">Quick:</span>
+        <button class="quick-pill" onclick="quickAsk('Which SKU has the highest reorder point, and why?')">Highest reorder point?</button>
+        <button class="quick-pill" onclick="quickAsk('Which model performed best overall and what was its average MAPE?')">Best model overall?</button>
+        <button class="quick-pill" onclick="quickAsk('What are the total annual inventory costs and which SKU is most expensive to hold?')">Total annual costs?</button>
+        <button class="quick-pill" onclick="quickAsk('Explain the safety stock calculation for FOODS_3_090_CA_1 and suggest how to reduce it.')">Safety stock for FOODS_3?</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════ JAVASCRIPT ══════════════════ -->
+<script>
+'use strict';
+
+// ── API base URL ──────────────────────────────────────────────────────────────
+// When opened as file:// we need the full origin; when served by FastAPI use same-origin.
+const API = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+
+// ── App state ─────────────────────────────────────────────────────────────────
+const state = {
+  skus: [],
+  inventory: [],
+  forecastCache: {},       // sku → forecast response (populated lazily)
+  charts: {
+    overview: null,
+    demand: null,
+    model: null,
+    fold: null,
+  },
+  overviewChartDone: false,
+};
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+const fmt = {
+  // MAPE stored as percentage value (e.g. 40.8), not decimal
+  mape:   v => v == null ? '<span style="color:var(--text-muted)">—</span>' : Number(v).toFixed(1) + '%',
+  rmse:   v => v == null ? '—' : Number(v).toFixed(2),
+  mase:   v => v == null ? '—' : Number(v).toFixed(3),
+  num:    (v, d=1) => v == null ? '—' : Number(v).toFixed(d),
+  int:    v => v == null ? '—' : Math.round(v).toLocaleString(),
+  dollar: v => v == null ? '—' : '$' + Number(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ','),
+
+  // Friendly model names — handles dynamic SARIMA / Hybrid strings
+  model: m => {
+    if (!m) return '—';
+    if (m === 'LightGBM-per-SKU') return 'LightGBM (per-SKU)';
+    if (m === 'LightGBM-global')  return 'LightGBM (global)';
+    if (m === 'Prophet')   return 'Prophet';
+    if (m === 'Croston')   return 'Croston';
+    if (m.startsWith('Hybrid-SARIMA')) return 'Hybrid SARIMA+LightGBM';
+    if (m.startsWith('SARIMA'))        return 'SARIMA';
+    return m;
+  },
+
+  // Short SKU label — strip the _CA_1 suffix for display
+  sku: s => s ? s.replace(/_CA_\d+$/, '') : s,
+
+  category: s => {
+    if (!s) return '';
+    if (s.startsWith('FOODS'))     return 'Foods';
+    if (s.startsWith('HOUSEHOLD')) return 'Household';
+    if (s.startsWith('HOBBIES'))   return 'Hobbies';
+    return '';
+  },
+};
+
+function riskBadge(pct) {
+  if (pct == null) return '<span class="badge badge-blue">N/A</span>';
+  const v = Number(pct);
+  if (v < 5)  return `<span class="badge badge-green">✓ ${v.toFixed(1)}%</span>`;
+  if (v < 10) return `<span class="badge badge-yellow">⚠ ${v.toFixed(1)}%</span>`;
+  return     `<span class="badge badge-red">✗ ${v.toFixed(1)}%</span>`;
+}
+
+function deltaHtml(v) {
+  if (v == null || Math.abs(v) < 0.05) return '<span class="delta delta-zero">—</span>';
+  const cls   = v > 0 ? 'delta-up' : 'delta-down';
+  const arrow = v > 0 ? '↑' : '↓';
+  return `<span class="delta ${cls}">${arrow} ${Math.abs(v).toFixed(1)}</span>`;
+}
+
+function costDeltaHtml(v) {
+  if (v == null || Math.abs(v) < 0.5) return '<span class="delta delta-zero">—</span>';
+  const cls   = v > 0 ? 'delta-up' : 'delta-down';
+  const arrow = v > 0 ? '↑' : '↓';
+  return `<span class="delta ${cls}">${arrow} ${fmt.dollar(Math.abs(v))}</span>`;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(body.detail || res.statusText);
+  }
+  return res.json();
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  checkHealth();
+  await Promise.all([loadSKUs(), loadInventory()]);
+  updateKPIs();
+  renderDemandChart();
+  // Overview forecast chart loads lazily when tab is visible (already active)
+  loadOverviewChart();
+});
+
+async function checkHealth() {
+  try {
+    const h = await apiFetch('/health');
+    document.getElementById('health-dot').className  = 'health-dot ok';
+    document.getElementById('health-text').textContent = `API online · ${h.skus.length} SKUs`;
+  } catch {
+    document.getElementById('health-dot').className  = 'health-dot error';
+    document.getElementById('health-text').textContent = 'API offline';
+  }
+}
+
+// ── SKU list ──────────────────────────────────────────────────────────────────
+async function loadSKUs() {
+  try {
+    state.skus = await apiFetch('/skus');
+    const sel = document.getElementById('fc-sku-select');
+    state.skus.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s;
+      o.textContent = s;
+      sel.appendChild(o);
+    });
+    document.getElementById('kpi-skus').textContent = state.skus.length;
+  } catch (e) {
+    console.error('loadSKUs:', e);
+  }
+}
+
+// ── Inventory baseline ────────────────────────────────────────────────────────
+async function loadInventory() {
+  try {
+    state.inventory = await apiFetch('/inventory');
+    renderInventoryTable();
+    renderOverviewSummaryTable();
+  } catch (e) {
+    const msg = `<tr><td colspan="9"><div class="error-bar" style="margin:8px">Failed to load: ${escHtml(e.message)}</div></td></tr>`;
+    document.getElementById('inv-tbody').innerHTML = msg;
+    document.getElementById('overview-tbody').innerHTML = msg.replace('colspan="9"', 'colspan="8"');
+  }
+}
+
+function updateKPIs() {
+  if (!state.inventory.length) return;
+
+  const total = state.inventory.reduce((s, r) => s + (r.total_annual_cost || 0), 0);
+  document.getElementById('kpi-cost').textContent = fmt.dollar(total);
+
+  const counts = {};
+  state.inventory.forEach(r => { if (r.best_model) counts[r.best_model] = (counts[r.best_model] || 0) + 1; });
+  const top = Object.entries(counts).sort((a,b) => b[1]-a[1])[0];
+  if (top) document.getElementById('kpi-model').textContent = fmt.model(top[0]);
+
+  const avgRisk = state.inventory.reduce((s,r) => s+(r.stockout_risk_pct||0), 0) / state.inventory.length;
+  document.getElementById('kpi-risk').textContent = avgRisk.toFixed(1) + '%';
+}
+
+// ── Overview summary table ────────────────────────────────────────────────────
+function renderOverviewSummaryTable() {
+  const tbody = document.getElementById('overview-tbody');
+  if (!state.inventory.length) { tbody.innerHTML = '<tr><td colspan="8" class="state-box">No data.</td></tr>'; return; }
+  tbody.innerHTML = state.inventory.map(r => `
+    <tr>
+      <td><code>${fmt.sku(r.sku_store)}</code></td>
+      <td><span class="badge badge-blue">${fmt.category(r.sku_store)}</span></td>
+      <td>${fmt.num(r.mean_daily_demand)} u/day</td>
+      <td><span class="badge badge-blue">${fmt.model(r.best_model)}</span></td>
+      <td>${fmt.int(r.safety_stock)} units</td>
+      <td>${fmt.int(r.reorder_point)} units</td>
+      <td>${fmt.dollar(r.total_annual_cost)}</td>
+      <td>${riskBadge(r.stockout_risk_pct)}</td>
+    </tr>`).join('');
+}
+
+// ── Overview: demand chart ────────────────────────────────────────────────────
+function renderDemandChart() {
+  if (!state.inventory.length) return;
+  const sorted = [...state.inventory].sort((a,b) => (b.mean_daily_demand||0) - (a.mean_daily_demand||0));
+  const ctx = document.getElementById('demand-chart').getContext('2d');
+  if (state.charts.demand) state.charts.demand.destroy();
+  state.charts.demand = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(r => fmt.sku(r.sku_store)),
+      datasets: [{
+        label: 'Mean daily demand (units)',
+        data: sorted.map(r => r.mean_daily_demand),
+        backgroundColor: sorted.map((_,i) => `hsl(${210+i*18},62%,${58-i*4}%)`),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { title: { display: true, text: 'Units / day' }, grid: { color: 'rgba(128,128,128,.1)' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+// ── Overview: model performance chart (loads all 5 SKU forecasts) ─────────────
+async function loadOverviewChart() {
+  if (state.overviewChartDone || !state.skus.length) return;
+  state.overviewChartDone = true;
+
+  const stateEl = document.getElementById('overview-chart-state');
+  const wrapEl  = document.getElementById('overview-chart-wrap');
+
+  try {
+    const results = await Promise.allSettled(
+      state.skus.map(s => apiFetch(`/forecast/${s}`))
+    );
+
+    // Cache results for Forecast Explorer
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') state.forecastCache[state.skus[i]] = r.value;
+    });
+
+    // Build model × SKU MAPE matrix
+    const modelSet = new Set();
+    const byModel  = {};   // modelName → { skuStore → mape }
+    results.forEach((result, i) => {
+      if (result.status !== 'fulfilled') return;
+      result.value.performance.forEach(p => {
+        modelSet.add(p.model);
+        if (!byModel[p.model]) byModel[p.model] = {};
+        byModel[p.model][state.skus[i]] = p.mape;  // already a % value
+      });
+    });
+
+    const models = [...modelSet].sort();
+    const palette = ['#185FA5','#2478c7','#4fa3e0','#7ec8f4','#b3ddfa'];
+
+    const datasets = state.skus.map((sku, i) => ({
+      label: fmt.sku(sku),
+      data: models.map(m => {
+        const v = byModel[m]?.[sku];
+        return v != null ? parseFloat(Number(v).toFixed(1)) : null;
+      }),
+      backgroundColor: palette[i % palette.length],
+      borderRadius: 3,
+      skipNull: true,
+    }));
+
+    stateEl.style.display = 'none';
+    wrapEl.style.display  = 'block';
+
+    const ctx = document.getElementById('overview-chart').getContext('2d');
+    if (state.charts.overview) state.charts.overview.destroy();
+    state.charts.overview = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: models.map(m => fmt.model(m)),
+        datasets,
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: { label: c => c.parsed.y != null ? `${c.dataset.label}: ${c.parsed.y}%` : null },
+          },
+        },
+        scales: {
+          y: {
+            title: { display: true, text: 'MAPE (%)' },
+            grid: { color: 'rgba(128,128,128,.1)' },
+            ticks: { callback: v => v + '%' },
+          },
+          x: { grid: { display: false } },
+        },
+      },
+    });
+  } catch (e) {
+    stateEl.innerHTML = `<div class="error-bar">Failed to load model performance: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// ── Tab navigation ────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.getElementById(`nav-${name}`).classList.add('active');
+}
+
+// ── Inventory baseline table ──────────────────────────────────────────────────
+function renderInventoryTable() {
+  const tbody = document.getElementById('inv-tbody');
+  if (!state.inventory.length) { tbody.innerHTML = '<tr><td colspan="9" class="state-box">No data.</td></tr>'; return; }
+  tbody.innerHTML = state.inventory.map(r => `
+    <tr>
+      <td><code>${fmt.sku(r.sku_store)}</code></td>
+      <td><span class="badge badge-blue">${fmt.model(r.best_model)}</span></td>
+      <td>${fmt.num(r.mean_daily_demand)} u/day</td>
+      <td>${fmt.int(r.safety_stock)}</td>
+      <td>${fmt.int(r.reorder_point)}</td>
+      <td>${fmt.int(r.eoq)}</td>
+      <td>${fmt.num(r.annual_orders, 1)}</td>
+      <td>${fmt.dollar(r.total_annual_cost)}</td>
+      <td>${riskBadge(r.stockout_risk_pct)}</td>
+    </tr>`).join('');
+}
+
+// ── What-if scenario ──────────────────────────────────────────────────────────
+async function runWhatIf() {
+  const sl  = parseInt(document.getElementById('sl-slider').value) / 100;
+  const btn = document.getElementById('whatif-btn');
+  const loadEl = document.getElementById('whatif-loading');
+  const resEl  = document.getElementById('whatif-results');
+
+  btn.disabled = true;
+  loadEl.style.display = 'flex';
+  resEl.style.display  = 'none';
+
+  try {
+    const data = await apiFetch('/inventory/whatif', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service_level: sl }),
+    });
+
+    document.getElementById('whatif-tbody').innerHTML = data.map(r => `
+      <tr>
+        <td><code>${fmt.sku(r.sku_store)}</code></td>
+        <td><span class="badge badge-blue">${Math.round(r.service_level * 100)}%</span></td>
+        <td>${fmt.int(r.safety_stock)}</td>
+        <td>${deltaHtml(r.safety_stock_delta)}</td>
+        <td>${fmt.int(r.reorder_point)}</td>
+        <td>${deltaHtml(r.reorder_point_delta)}</td>
+        <td>${fmt.dollar(r.total_annual_cost)}</td>
+        <td>${costDeltaHtml(r.cost_delta)}</td>
+        <td>${riskBadge(r.stockout_risk_pct)}</td>
+      </tr>`).join('');
+
+    resEl.style.display = 'block';
+  } catch (e) {
+    alert(`What-if error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    loadEl.style.display = 'none';
+  }
+}
+
+// ── Forecast Explorer ─────────────────────────────────────────────────────────
+async function loadForecast() {
+  const sku = document.getElementById('fc-sku-select').value;
+  const errEl   = document.getElementById('fc-error');
+  const contEl  = document.getElementById('fc-content');
+  const emptyEl = document.getElementById('fc-empty');
+
+  errEl.style.display  = 'none';
+  contEl.style.display = 'none';
+  emptyEl.style.display = 'flex';
+  emptyEl.innerHTML = '<div class="spinner"></div> Loading forecast data…';
+
+  if (!sku) {
+    errEl.textContent    = 'Please select a SKU.';
+    errEl.style.display  = 'block';
+    emptyEl.innerHTML    = 'Select a SKU above and click <strong style="margin-left:4px">Load Forecast</strong>.';
+    return;
+  }
+
+  try {
+    // Use cached data if already loaded by overview chart
+    const data = state.forecastCache[sku] || await apiFetch(`/forecast/${sku}`);
+    state.forecastCache[sku] = data;
+
+    renderPerfTable(data);
+    renderModelMaseChart(data);
+    renderFoldChart(data);
+
+    document.getElementById('fold-chart-title').textContent =
+      `Forecast vs Actual · ${fmt.model(data.best_model)} (best) · Horizon 28 · All Folds`;
+
+    emptyEl.style.display = 'none';
+    contEl.style.display  = 'block';
+  } catch (e) {
+    errEl.textContent    = `Error: ${e.message}`;
+    errEl.style.display  = 'block';
+    emptyEl.innerHTML    = '';
+  }
+}
+
+function renderPerfTable(data) {
+  document.getElementById('perf-tbody').innerHTML = data.performance.map(p => {
+    const best = p.model === data.best_model;
+    return `
+      <tr${best ? ' class="best-row"' : ''}>
+        <td>
+          ${fmt.model(p.model)}
+          ${best ? '<span class="badge badge-blue" style="margin-left:6px">Best</span>' : ''}
+        </td>
+        <td>${fmt.mape(p.mape)}</td>
+        <td>${fmt.rmse(p.rmse)}</td>
+        <td><strong>${fmt.mase(p.mase)}</strong></td>
+      </tr>`;
+  }).join('');
+}
+
+function renderModelMaseChart(data) {
+  const ctx = document.getElementById('model-chart').getContext('2d');
+  if (state.charts.model) state.charts.model.destroy();
+
+  const rows = data.performance.filter(p => p.mase != null);
+
+  state.charts.model = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(p => fmt.model(p.model)),
+      datasets: [{
+        label: 'MASE',
+        data: rows.map(p => parseFloat(Number(p.mase).toFixed(3))),
+        backgroundColor: rows.map(p => p.model === data.best_model ? '#185FA5' : '#93c5fd'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          title: { display: true, text: 'MASE (lower = better)' },
+          grid: { color: 'rgba(128,128,128,.1)' },
+        },
+        y: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderFoldChart(data) {
+  const ctx = document.getElementById('fold-chart').getContext('2d');
+  if (state.charts.fold) state.charts.fold.destroy();
+
+  if (!data.folds.length) {
+    ctx.canvas.closest('.chart-box-lg').innerHTML = '<div class="state-box">No fold data available for this SKU.</div>';
+    return;
+  }
+
+  // Combine all folds into one de-duplicated, sorted timeline
+  const seen = new Map();
+  data.folds.forEach(fold => {
+    fold.dates.forEach((d, i) => seen.set(d, { date: d, forecast: fold.forecast[i], actual: fold.actual[i] }));
+  });
+  const points = [...seen.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  state.charts.fold = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: points.map(p => p.date),
+      datasets: [
+        {
+          label: 'Actual',
+          data: points.map(p => p.actual),
+          borderColor: '#64748b',
+          backgroundColor: 'rgba(100,116,139,.06)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.1,
+          fill: false,
+          order: 2,
+        },
+        {
+          label: `Forecast (${fmt.model(data.best_model)})`,
+          data: points.map(p => p.forecast),
+          borderColor: '#185FA5',
+          backgroundColor: 'rgba(24,95,165,.08)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+          fill: true,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 14, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: c => `${c.dataset.label}: ${Number(c.parsed.y).toFixed(1)} units`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 12, maxRotation: 30, font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          title: { display: true, text: 'Sales (units)' },
+          grid: { color: 'rgba(128,128,128,.1)' },
+        },
+      },
+    },
+  });
+}
+
+// ── AI Assistant ──────────────────────────────────────────────────────────────
+function quickAsk(q) {
+  document.getElementById('chat-input').value = q;
+  sendMsg();
+}
+
+async function sendMsg() {
+  const input   = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('send-btn');
+  const q = input.value.trim();
+  if (!q) return;
+
+  input.value   = '';
+  input.disabled  = true;
+  sendBtn.disabled = true;
+
+  appendChatMsg('user', q);
+  const typingId = appendTyping();
+
+  try {
+    const data = await apiFetch('/agent/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    removeTyping(typingId);
+    appendChatMsg('ai', data.answer);
+  } catch (e) {
+    removeTyping(typingId);
+    appendChatMsg('ai', `Sorry, I ran into an error: ${e.message}`);
+  } finally {
+    input.disabled   = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function appendChatMsg(role, text) {
+  const c   = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar ${role}">${role === 'ai' ? 'AI' : 'You'}</div>
+    <div class="msg-bubble"><pre>${escHtml(text)}</pre></div>`;
+  c.appendChild(div);
+  c.scrollTop = c.scrollHeight;
+}
+
+function appendTyping() {
+  const c   = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  const id  = `typing-${Date.now()}`;
+  div.id = id;
+  div.className = 'msg ai';
+  div.innerHTML = `
+    <div class="msg-avatar ai">AI</div>
+    <div class="msg-bubble" style="display:flex;align-items:center;gap:7px">
+      <div class="spinner" style="width:14px;height:14px;border-width:2px"></div>
+      <span style="color:var(--text-muted);font-size:12px">Thinking…</span>
+    </div>`;
+  c.appendChild(div);
+  c.scrollTop = c.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  document.getElementById(id)?.remove();
+}
+</script>
+</body>
+</html>

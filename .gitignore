@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.python-version
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Data — never commit
+data/raw/
+data/processed/
+*.csv
+*.zip
+*.parquet
+
+# Trained model artifacts — too large for git
+/models/
+*.pkl
+*.joblib
+
+# Secrets
+.env
+*.key
+kaggle.json
+access_token
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.claude/
+
+# OS
+Thumbs.db
